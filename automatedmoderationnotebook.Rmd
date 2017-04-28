@@ -1,0 +1,180 @@
+---
+title: "Automated content moderation code"
+output:
+  github_document:
+    toc: true
+    toc_depth: 2
+---
+
+Import a load of stuff
+
+```{r, message = FALSE}
+require(irr)
+require(boot)
+require(tidyverse)
+require(pander)
+```
+
+## Toxicity
+
+```{r, message = FALSE}
+tox <- read_tsv("dat/toxicity_annotated_comments.tsv")
+tox.dem <- read_tsv("dat/toxicity_worker_demographics.tsv")
+tox.ann <- read_tsv("dat/toxicity_annotations.tsv")
+agg <- read_tsv("dat/aggression_annotated_comments.tsv")
+agg.dem <- read_tsv("dat/aggression_worker_demographics.tsv")
+agg.ann <- read_tsv("dat/aggression_annotations.tsv")
+
+```
+ 
+```{r}
+# Join data frames together
+tox.ann %>% left_join(tox.dem) -> tox.long
+```
+## Distribution of average toxicity per worker.
+We might want to know what the average worker's toxicity score is.
+
+
+```{r}
+tox.long %>% group_by(worker_id, gender, age_group, education, english_first_language) %>% filter(gender %in% c("male", "female", NA)) %>% summarise(mean.toxicityscore = mean(toxicity_score)) -> tox.workermeans
+
+
+ggplot(tox.workermeans) + stat_density(aes(mean.toxicityscore)) + ggtitle("Distribution of mean toxicity score") + theme_minimal()
+```
+
+```{r}
+ggplot(tox.workermeans) + 
+  geom_violin(aes(y = mean.toxicityscore, 
+                  fill = gender, 
+                  x = gender)) + 
+  ggtitle("Distribution of mean toxicity score by gender") + 
+  theme_minimal()
+```
+
+```{r}
+ggplot(tox.workermeans) + 
+  geom_violin(aes(mean.toxicityscore, 
+                  fill = age_group, 
+                  x = age_group)) + 
+  ggtitle("Distribution of mean toxicity score by age") + 
+  theme_minimal()
+```
+
+```{r}
+ggplot(tox.workermeans) + 
+  geom_violin(aes(mean.toxicityscore, 
+                  fill = education, 
+                  x = education)) + 
+  ggtitle("Distribution of mean toxicity score by education") + 
+  theme_minimal()
+```
+
+```{r}
+  ggplot(tox.workermeans) + 
+  geom_violin(aes(mean.toxicityscore, 
+                  fill = factor(english_first_language), 
+                  x = factor(english_first_language))) + 
+  ggtitle("Distribution of mean toxicity score by first language") + 
+  theme_minimal()
+```
+
+
+### Can we predict who will have a higher mean toxicity score?
+
+Do this over the data with NA's subsetted out.
+```{r}
+lm(formula = mean.toxicityscore ~ gender + age_group + education + english_first_language,
+   data = tox.workermeans %>% na.omit) %>% 
+  summary %>% 
+  pander(add.significance.stars = T)
+```
+
+##  Getting aggressive
+
+```{r}
+# Join data frames together
+agg.ann %>% left_join(agg.dem) -> agg.long
+```
+## Distribution of average aggression per worker.
+We might want to know what the average worker's aggression score is.
+
+
+```{r}
+agg.long %>% 
+  group_by(worker_id, gender, age_group, education, english_first_language) %>% 
+  filter(gender %in% c("male", "female", NA)) %>% 
+  summarise(mean.aggressionscore = mean(aggression_score)) -> agg.workermeans
+
+
+ggplot(agg.workermeans) + 
+  stat_density(aes(mean.aggressionscore)) + 
+  ggtitle("Distribution of mean aggression score") + 
+  theme_minimal()
+```
+
+```{r}
+ggplot(agg.workermeans) + 
+  geom_violin(aes(y = mean.aggressionscore, 
+                  fill = gender, 
+                  x = gender)) + 
+  ggtitle("Distribution of mean aggression score by gender") + 
+  theme_minimal()
+```
+
+```{r}
+ggplot(agg.workermeans) + 
+  geom_violin(aes(mean.aggressionscore, 
+                  fill = age_group, 
+                  x = age_group)) + 
+  ggtitle("Distribution of mean aggression score by age") + 
+  theme_minimal()
+```
+
+```{r}
+ggplot(agg.workermeans) +
+  geom_violin(aes(mean.aggressionscore, 
+                  fill = education, 
+                  x = education)) + 
+  ggtitle("Distribution of mean aggression score by education") +
+  theme_minimal()
+```
+
+```{r}
+  ggplot(agg.workermeans) + 
+  geom_violin(aes(mean.aggressionscore, 
+                  fill = factor(english_first_language), 
+                  x = factor(english_first_language))) + 
+  ggtitle("Distribution of mean aggression score by first language") + 
+  theme_minimal()
+```
+
+
+### Can we predict who will have a higher mean aggression score?
+
+Do this over the data with NA's subsetted out.
+```{r pander}
+lm(formula = mean.aggressionscore ~ gender + age_group + education + english_first_language,
+   data = agg.workermeans %>% na.omit) %>% 
+  summary %>% 
+  pander(add.significance.stars = T)
+```
+
+<!-- Make dissent metric per comment -->
+<!-- ```{r} -->
+<!-- tox.long %>% filter(!is.na(gender)) %>%  -->
+<!--   group_by(rev_id, gender) %>%  -->
+<!--   filter(n() > 1) %>% -->
+<!--   mutate(mean.tox = round(mean(toxicity)),  -->
+<!--          dissenter = ifelse(toxicity != mean.tox, 1, 0)) %>% -->
+<!--   summarise(dissent = sum(dissenter)/n()) -> tox.dissent -->
+<!-- ``` -->
+
+
+<!-- Sum dissent metric per comment -->
+<!-- ```{r} -->
+<!-- tox.dissent %>% filter(gender == "female")  -> tox.dissent.f -->
+<!-- tox.dissent %>% filter(gender == "male")  -> tox.dissent.m -->
+<!-- ``` -->
+
+
+

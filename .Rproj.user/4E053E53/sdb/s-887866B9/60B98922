@@ -1,0 +1,20 @@
+{
+    "collab_server" : "",
+    "contents" : "```{r pander}\nn <- 100\nx <- rnorm(n)\ny <- 2*x + rnorm(n)\nout <- lm(y ~ x)\nlibrary(pander)\npanderOptions(\"digits\", 2)\npander(out)\n```\n",
+    "created" : 1493375281212.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3787782646",
+    "id" : "60B98922",
+    "lastKnownWriteTime" : 1493375274,
+    "last_content_update" : 1493375274,
+    "path" : "~/Downloads/pander.Rmd",
+    "project_path" : null,
+    "properties" : {
+    },
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}
