@@ -1,0 +1,13 @@
+base
+lpSolve
+irr
+boot
+tidyverse
+ggplot2
+tibble
+tidyr
+readr
+purrr
+dplyr
+pander
+tidytext

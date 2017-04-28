@@ -2,7 +2,7 @@
 title: "Automated content moderation code"
 output:
   github_document:
-    toc: true
+    toc: yes
     toc_depth: 2
 ---
 
@@ -17,7 +17,7 @@ require(pander)
 
 ## Toxicity
 
-```{r, message = FALSE}
+```{r, cache = TRUE}
 tox <- read_tsv("dat/toxicity_annotated_comments.tsv")
 tox.dem <- read_tsv("dat/toxicity_worker_demographics.tsv")
 tox.ann <- read_tsv("dat/toxicity_annotations.tsv")
@@ -27,7 +27,7 @@ agg.ann <- read_tsv("dat/aggression_annotations.tsv")
 
 ```
  
-```{r}
+```{r, cache = TRUE}
 # Join data frames together
 tox.ann %>% left_join(tox.dem) -> tox.long
 ```
@@ -35,14 +35,14 @@ tox.ann %>% left_join(tox.dem) -> tox.long
 We might want to know what the average worker's toxicity score is.
 
 
-```{r}
+```{r, cache = TRUE}
 tox.long %>% group_by(worker_id, gender, age_group, education, english_first_language) %>% filter(gender %in% c("male", "female", NA)) %>% summarise(mean.toxicityscore = mean(toxicity_score)) -> tox.workermeans
 
 
 ggplot(tox.workermeans) + stat_density(aes(mean.toxicityscore)) + ggtitle("Distribution of mean toxicity score") + theme_minimal()
 ```
 
-```{r}
+```{r, cache = TRUE}
 ggplot(tox.workermeans) + 
   geom_violin(aes(y = mean.toxicityscore, 
                   fill = gender, 
@@ -51,7 +51,7 @@ ggplot(tox.workermeans) +
   theme_minimal()
 ```
 
-```{r}
+```{r, cache = TRUE}
 ggplot(tox.workermeans) + 
   geom_violin(aes(mean.toxicityscore, 
                   fill = age_group, 
@@ -60,7 +60,7 @@ ggplot(tox.workermeans) +
   theme_minimal()
 ```
 
-```{r}
+```{r, cache = TRUE}
 ggplot(tox.workermeans) + 
   geom_violin(aes(mean.toxicityscore, 
                   fill = education, 
@@ -69,7 +69,7 @@ ggplot(tox.workermeans) +
   theme_minimal()
 ```
 
-```{r}
+```{r, cache = TRUE}
   ggplot(tox.workermeans) + 
   geom_violin(aes(mean.toxicityscore, 
                   fill = factor(english_first_language), 
@@ -82,7 +82,7 @@ ggplot(tox.workermeans) +
 ### Can we predict who will have a higher mean toxicity score?
 
 Do this over the data with NA's subsetted out.
-```{r}
+```{r, cache = TRUE}
 lm(formula = mean.toxicityscore ~ gender + age_group + education + english_first_language,
    data = tox.workermeans %>% na.omit) %>% 
   summary %>% 
@@ -91,7 +91,7 @@ lm(formula = mean.toxicityscore ~ gender + age_group + education + english_first
 
 ##  Getting aggressive
 
-```{r}
+```{r, cache = TRUE}
 # Join data frames together
 agg.ann %>% left_join(agg.dem) -> agg.long
 ```
@@ -99,7 +99,7 @@ agg.ann %>% left_join(agg.dem) -> agg.long
 We might want to know what the average worker's aggression score is.
 
 
-```{r}
+```{r, cache = TRUE}
 agg.long %>% 
   group_by(worker_id, gender, age_group, education, english_first_language) %>% 
   filter(gender %in% c("male", "female", NA)) %>% 
@@ -112,7 +112,7 @@ ggplot(agg.workermeans) +
   theme_minimal()
 ```
 
-```{r}
+```{r, cache = TRUE}
 ggplot(agg.workermeans) + 
   geom_violin(aes(y = mean.aggressionscore, 
                   fill = gender, 
@@ -121,7 +121,7 @@ ggplot(agg.workermeans) +
   theme_minimal()
 ```
 
-```{r}
+```{r, cache = TRUE}
 ggplot(agg.workermeans) + 
   geom_violin(aes(mean.aggressionscore, 
                   fill = age_group, 
@@ -130,7 +130,7 @@ ggplot(agg.workermeans) +
   theme_minimal()
 ```
 
-```{r}
+```{r, cache = TRUE}
 ggplot(agg.workermeans) +
   geom_violin(aes(mean.aggressionscore, 
                   fill = education, 
@@ -139,7 +139,7 @@ ggplot(agg.workermeans) +
   theme_minimal()
 ```
 
-```{r}
+```{r, cache = TRUE}
   ggplot(agg.workermeans) + 
   geom_violin(aes(mean.aggressionscore, 
                   fill = factor(english_first_language), 
@@ -152,15 +152,71 @@ ggplot(agg.workermeans) +
 ### Can we predict who will have a higher mean aggression score?
 
 Do this over the data with NA's subsetted out.
-```{r pander}
+```{r pander, cache = TRUE}
 lm(formula = mean.aggressionscore ~ gender + age_group + education + english_first_language,
    data = agg.workermeans %>% na.omit) %>% 
   summary %>% 
   pander(add.significance.stars = T)
 ```
 
+##  Making text classifiers
+
+```{r}
+library(tidytext)
+agg$comment <- gsub("NEWLINE_TOKEN", " ", agg$comment)
+
+# combine demographics + annotations
+# add column for how many of each gender
+# were reviewing
+agg.comb <- agg.ann %>% 
+  left_join(agg.dem) %>%
+  group_by(rev_id) %>%
+  mutate(female_workers = sum(gender == "female"),
+         male_workers = sum(gender == "male"),
+         NA_workers = sum(is.na(gender)),
+         other_workers = sum(gender == "other"))
+
+agg %>% unnest_tokens(ngram, comment, token = "ngrams", n = 2) -> agg.text
+agg.text %>% left_join(agg.comb) -> agg.text
+
+agg.text %>% 
+  filter(gender %in% c("female", "male") & # filter NA and other
+         female_workers > 0,
+         male_workers > 0) %>% # filter where there are no females
+  mutate(gender_male = (gender == "male"), # make a dummy variable
+         weighted_agg = # normalise the scores
+           (gender_male * # trigger for male
+              (aggression_score/male_workers) * 
+              (male_workers + female_workers) * 0.5) +
+           ((1-gender_male) * # trigger for female
+              (aggression_score/female_workers) * 
+              (male_workers + female_workers) * 0.5)
+         ) %>%
+  group_by(ngram, gender) %>% 
+  summarise(sum.aggression = sum(weighted_agg)) -> ngram.agg.bygender
+```
+
+
+Which were the most offensive ngrams for women?
+
+```{r, cache = TRUE}
+# Aggression for females
+ngram.agg.bygender %>% filter(gender == "female") %>% select(ngram, agg.sum.fem = sum.aggression) -> ngram.agg.fem 
+
+# Aggression for males
+ngram.agg.bygender %>% filter(gender == "male") %>% select(ngram, agg.sum.mal = sum.aggression) -> ngram.agg.male
+
+# Combine and calculate difference, and order
+ngram.agg.male %>% left_join(ngram.agg.fem) %>% mutate(agg.sum.diff = abs(agg.sum.mal - agg.sum.fem)) %>% arrange(desc(agg.sum.diff)) -> ngram.compare 
+
+print(ngram.compare, n = 100)
+
+```
+
+
+
 <!-- Make dissent metric per comment -->
-<!-- ```{r} -->
+<!-- ```{r, cache = TRUE} -->
 <!-- tox.long %>% filter(!is.na(gender)) %>%  -->
 <!--   group_by(rev_id, gender) %>%  -->
 <!--   filter(n() > 1) %>% -->
@@ -171,7 +227,7 @@ lm(formula = mean.aggressionscore ~ gender + age_group + education + english_fir
 
 
 <!-- Sum dissent metric per comment -->
-<!-- ```{r} -->
+<!-- ```{r, cache = TRUE} -->
 <!-- tox.dissent %>% filter(gender == "female")  -> tox.dissent.f -->
 <!-- tox.dissent %>% filter(gender == "male")  -> tox.dissent.m -->
 <!-- ``` -->
